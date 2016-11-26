@@ -6,27 +6,25 @@ val commonSettings: Seq[Setting[_]] = Seq(
   organization := "org.scala-js",
   scalaVersion := "2.11.8",
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xfatal-warnings"),
-
   homepage := Some(url("http://scala-js.org/")),
   licenses += ("BSD New",
-      url("https://github.com/scala-js/scala-js-java-time/blob/master/LICENSE")),
-  scmInfo := Some(ScmInfo(
-      url("https://github.com/scala-js/scala-js-java-time"),
-      "scm:git:git@github.com:scala-js/scala-js-java-time.git",
-      Some("scm:git:git@github.com:scala-js/scala-js-java-time.git")))
+  url("https://github.com/scala-js/scala-js-java-time/blob/master/LICENSE")),
+  scmInfo := Some(
+    ScmInfo(url("https://github.com/scala-js/scala-js-java-time"),
+            "scm:git:git@github.com:scala-js/scala-js-java-time.git",
+            Some("scm:git:git@github.com:scala-js/scala-js-java-time.git")))
 )
 
-lazy val root: Project = project.in(file(".")).
-  enablePlugins(ScalaJSPlugin).
-  settings(commonSettings).
-  settings(
+lazy val root: Project = project
+  .in(file("."))
+  .enablePlugins(ScalaJSPlugin)
+  .settings(commonSettings)
+  .settings(
     name := "scalajs-java-time",
-
     mappings in (Compile, packageBin) ~= {
       _.filter(!_._2.endsWith(".class"))
     },
     exportJars := true,
-
     publishMavenStyle := true,
     publishTo := {
       val nexus = "https://oss.sonatype.org/"
@@ -36,7 +34,7 @@ lazy val root: Project = project.in(file(".")).
         Some("releases" at nexus + "service/local/staging/deploy/maven2")
     },
     pomExtra := (
-        <developers>
+      <developers>
           <developer>
             <id>sjrd</id>
             <name>Sébastien Doeraene</name>
@@ -54,7 +52,9 @@ lazy val root: Project = project.in(file(".")).
           </developer>
         </developers>
     ),
-    pomIncludeRepository := { _ => false }
+    pomIncludeRepository := { _ =>
+      false
+    }
   )
 
 lazy val testSuite = CrossProject(
@@ -62,18 +62,21 @@ lazy val testSuite = CrossProject(
   jsId = "testSuite",
   base = file("testSuite"),
   crossType = CrossType.Full
-).
-  jsConfigure(_ .enablePlugins(ScalaJSJUnitPlugin)).
-  settings(commonSettings: _*).
-  settings(
+).jsConfigure(_.enablePlugins(ScalaJSJUnitPlugin))
+  .settings(commonSettings: _*)
+  .settings(
     testOptions +=
-      Tests.Argument(TestFramework("com.novocode.junit.JUnitFramework"), "-v", "-a")
-  ).
-  jsSettings(
-    name := "java.time testSuite on JS"
-  ).
-  jsConfigure(_.dependsOn(root)).
-  jvmSettings(
+      Tests.Argument(TestFramework("com.novocode.junit.JUnitFramework"),
+                     "-v",
+                     "-a")
+                     "-a")
+  )
+  .jsSettings(
+    name := "java.time testSuite on JS",
+    libraryDependencies += "com.github.cquiroz" %%% "scala-java-locales" % "0.3.1-cldr30"
+  )
+  .jsConfigure(_.dependsOn(root))
+  .jvmSettings(
     name := "java.time testSuite on JVM",
     libraryDependencies +=
       "com.novocode" % "junit-interface" % "0.9" % "test"
