@@ -69,7 +69,6 @@ lazy val testSuite = CrossProject(
       Tests.Argument(TestFramework("com.novocode.junit.JUnitFramework"),
                      "-v",
                      "-a")
-                     "-a")
   )
   .jsSettings(
     name := "java.time testSuite on JS",

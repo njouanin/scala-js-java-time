@@ -1,5 +1,8 @@
 package java.time.temporal
 
+import java.time.format.ResolverStyle
+import java.util.Locale
+
 trait TemporalField {
   // Not implemented
   // def getDisplayName(locale: java.util.Locale): String
@@ -20,10 +23,11 @@ trait TemporalField {
 
   def getFrom(temporal: TemporalAccessor): Long
 
+  def getDisplayName(locale: Locale): String
+
   def adjustInto[R <: Temporal](temporal: R, value: Long): R
 
-  // Not implemented
-  // def resolve(fieldValues: java.util.Map[TemporalField, Long],
-  //     partialTemporal: TemporalAccessor,
-  //     resolverStyle: ResolverStyle): TemporalAccessor
+  def resolve(fieldValues: java.util.Map[TemporalField, Long],
+              partialTemporal: TemporalAccessor,
+              resolverStyle: ResolverStyle): TemporalAccessor
 }

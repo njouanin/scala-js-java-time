@@ -2,17 +2,19 @@ package java.time.chrono
 
 import scala.collection.JavaConverters._
 import scala.scalajs.js
-
-import java.time.{Period, DateTimeException}
-import java.time.temporal.{ValueRange, ChronoField, TemporalAccessor}
-import java.{util => ju}
+import java.time.{DateTimeException, Period}
+import java.time.temporal.{ChronoField, Temporal, TemporalAccessor, ValueRange}
+import java.{util ⇒ ju}
 
 trait Chronology extends Comparable[Chronology] {
   def getId(): String
 
   def getCalendarType(): String
 
-  def date(era: Era, yearOfEra: Int, month: Int, dayOfMonth: Int): ChronoLocalDate =
+  def date(era: Era,
+           yearOfEra: Int,
+           month: Int,
+           dayOfMonth: Int): ChronoLocalDate =
     date(prolepticYear(era, yearOfEra), month, dayOfMonth)
 
   def date(prolepticYear: Int, month: Int, dayOfMonth: Int): ChronoLocalDate
@@ -62,6 +64,41 @@ trait Chronology extends Comparable[Chronology] {
 
   def period(years: Int, months: Int, days: Int): ChronoPeriod =
     Period.of(years, months, days)
+
+  private[chrono] def ensureChronoLocalDate[D <: ChronoLocalDate](
+      temporal: Temporal): D = {
+    val other = temporal.asInstanceOf[D]
+    if (!this.equals(other.getChronology())) {
+      throw new ClassCastException(
+        "Chrono mismatch, expected: " + getId() + ", actual: " + other
+          .getChronology()
+          .getId())
+    }
+    other
+  }
+
+  private[chrono] def ensureChronoLocalDateTime[D <: ChronoLocalDate](
+      temporal: Temporal): ChronoLocalDateTimeImpl[D] = {
+    val other = temporal.asInstanceOf[ChronoLocalDateTimeImpl[D]]
+    if (!this.equals(other.toLocalDate().getChronology())) {
+      throw new ClassCastException(
+        "Chrono mismatch, required: " + getId()
+          + ", supplied: " + other.toLocalDate().getChronology().getId())
+    }
+    other
+  }
+
+  private[chrono] def ensureChronoZonedDateTime[D <: ChronoLocalDate](
+      temporal: Temporal): ChronoZonedDateTimeImpl[D] = {
+    val other = temporal.asInstanceOf[ChronoZonedDateTimeImpl[D]]
+    if (!this.equals(other.toLocalDate().getChronology())) {
+      throw new ClassCastException(
+        "Chrono mismatch, required: " + getId()
+          + ", supplied: " + other.toLocalDate().getChronology().getId())
+    }
+    other
+  }
+
 }
 
 object Chronology {
