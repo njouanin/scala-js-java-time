@@ -117,22 +117,20 @@ abstract class ChronoLocalDateTime[D <: ChronoLocalDate]
     this.toLocalDate().toEpochDay() == other.toLocalDate().toEpochDay()
   }
 
-  override def equals(obj: Object): Boolean = {
-    if (this == obj) {
+  override def equals(obj: Any): Boolean = {
+    if (obj == this)
       true
-    } else {
-      if (obj.isInstanceOf[ChronoLocalDateTime]) {
-        compareTo(obj.asInstanceOf[ChronoLocalDateTime[_]]) == 0
-      } else
-        false
+    else {
+      obj match {
+        case other: ChronoLocalDateTime[_] => compareTo(other) == 0
+        case _ => false
+      }
     }
   }
 
-  override def hashCode(): Int =
-    toLocalDate().hashCode() ^ toLocalTime().hashCode()
+  override def hashCode: Int = toLocalDate().hashCode() ^ toLocalTime().hashCode()
 
-  override def toString(): String =
-    toLocalDate().toString() + 'T' + toLocalTime().toString()
+  override def toString(): String = toLocalDate().toString() + 'T' + toLocalTime().toString()
 
 }
 

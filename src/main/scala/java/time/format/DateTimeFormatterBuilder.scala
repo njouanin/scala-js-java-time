@@ -272,7 +272,7 @@ object DateTimeFormatterBuilder {
         return false
       }
       val inSec = inSecs
-      val inNano = NANO_OF_SECOND.checkValidIntValue(inNanos)
+      var inNano = NANO_OF_SECOND.checkValidIntValue(inNanos)
       if (inSec >= -SECONDS_0000_TO_1970) {
         // current era
         val zeroSecs = inSec - SECONDS_PER_10000_YEARS + SECONDS_0000_TO_1970
@@ -325,7 +325,7 @@ object DateTimeFormatterBuilder {
         }
       } else if (fractionalDigits > 0 || (fractionalDigits == -1 && inNano > 0)) {
         buf.append('.')
-        val div = 100000000
+        var div = 100000000
         for (i ← 0 to ((fractionalDigits == -1 && inNano > 0) || i < fractionalDigits)) {
           var digit = inNano / div
           buf.append((char)(digit + '0'))

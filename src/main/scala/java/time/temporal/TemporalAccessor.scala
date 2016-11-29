@@ -30,6 +30,5 @@ trait TemporalAccessor {
 
   def getLong(field: TemporalField): Long
 
-  // Not implemented
-  // def query[R](query: TemporalQuery[R]): R
+  def query[R](query: TemporalQuery[R]): R
 }
