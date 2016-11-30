@@ -12,7 +12,7 @@ import java.time.ZoneId
 import java.time.chrono.Chronology
 import java.time.temporal.TemporalField
 import java.util
-import java.util.Locale
+import java.util.{Locale, Objects}
 
 final class DateTimeParseContext(
     private[DateTimeParseContext] val locale: Locale,
@@ -55,6 +55,20 @@ final class DateTimeParseContext(
       ch1 == ch2
     else
       DateTimeParseContext.charEqualsIgnoreCase(ch1, ch2)
+  }
+
+  def setParsedLeapSecond(): Unit = currentParsed().leapSecond = true
+
+  def setParsedField(field: TemporalField,
+                     value: Long,
+                     errorPos: Int,
+                     successPos: Int): Int = {
+    Objects.requireNonNull(field, "field")
+    val old: Long = currentParsed().fieldValues.put(field, value)
+    if (old != null && old.longValue() != value)
+      ~errorPos
+    else
+      successPos
   }
 
   def startOptional(): Unit = {

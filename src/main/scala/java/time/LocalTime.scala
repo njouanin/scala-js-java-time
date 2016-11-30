@@ -1,11 +1,15 @@
 package java.time
 
-import scala.scalajs.js
+import java.io.{DataInput, DataOutput}
+import java.time.LocalTime.readExternal
 
+import scala.scalajs.js
 import java.time.temporal._
 
 final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
-    extends Temporal with TemporalAdjuster with Comparable[LocalTime]
+    extends Temporal
+    with TemporalAdjuster
+    with Comparable[LocalTime]
     with java.io.Serializable {
 
   import Preconditions.requireDateTime
@@ -18,20 +22,23 @@ final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
       NANOS_IN_MINUTE * minute + NANOS_IN_HOUR * hour)
 
   requireDateTime(hour >= 0 && hour <= 23, s"Invalid value for hour: $hour")
-  requireDateTime(minute >= 0 && minute <= 59, s"Invalid value for minute: $minute")
-  requireDateTime(second >= 0 && second <= 59, s"Invalid value for second: $second")
-  requireDateTime(nano >= 0 && nano <= 999999999, s"Invalid value for nanoOfSecond $nano")
+  requireDateTime(minute >= 0 && minute <= 59,
+                  s"Invalid value for minute: $minute")
+  requireDateTime(second >= 0 && second <= 59,
+                  s"Invalid value for second: $second")
+  requireDateTime(nano >= 0 && nano <= 999999999,
+                  s"Invalid value for nanoOfSecond $nano")
 
   def isSupported(field: TemporalField): Boolean = field match {
     case _: ChronoField => field.isTimeBased
-    case null           => false
-    case _              => field.isSupportedBy(this)
+    case null => false
+    case _ => field.isSupportedBy(this)
   }
 
   def isSupported(unit: TemporalUnit): Boolean = unit match {
     case _: ChronoUnit => unit.isTimeBased
-    case null          => false
-    case _             => unit.isSupportedBy(this)
+    case null => false
+    case _ => unit.isSupportedBy(this)
   }
 
   // Implemented by TemporalAccessor
@@ -41,24 +48,25 @@ final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
   // def get(field: TemporalField): Int
 
   def getLong(field: TemporalField): Long = field match {
-    case NANO_OF_SECOND     => nano
-    case NANO_OF_DAY        => totalNanos
-    case MICRO_OF_SECOND    => nano / NANOS_IN_MICRO
-    case MICRO_OF_DAY       => totalNanos / NANOS_IN_MICRO
-    case MILLI_OF_SECOND    => nano / NANOS_IN_MILLI
-    case MILLI_OF_DAY       => totalNanos / NANOS_IN_MILLI
-    case SECOND_OF_MINUTE   => second
-    case SECOND_OF_DAY      => totalNanos / NANOS_IN_SECOND
-    case MINUTE_OF_HOUR     => minute
-    case MINUTE_OF_DAY      => totalNanos / NANOS_IN_MINUTE
-    case HOUR_OF_AMPM       => hour % 12
+    case NANO_OF_SECOND => nano
+    case NANO_OF_DAY => totalNanos
+    case MICRO_OF_SECOND => nano / NANOS_IN_MICRO
+    case MICRO_OF_DAY => totalNanos / NANOS_IN_MICRO
+    case MILLI_OF_SECOND => nano / NANOS_IN_MILLI
+    case MILLI_OF_DAY => totalNanos / NANOS_IN_MILLI
+    case SECOND_OF_MINUTE => second
+    case SECOND_OF_DAY => totalNanos / NANOS_IN_SECOND
+    case MINUTE_OF_HOUR => minute
+    case MINUTE_OF_DAY => totalNanos / NANOS_IN_MINUTE
+    case HOUR_OF_AMPM => hour % 12
     case CLOCK_HOUR_OF_AMPM => if (hour % 12 == 0) 12 else hour % 12
-    case HOUR_OF_DAY        => hour
-    case CLOCK_HOUR_OF_DAY  => if (hour == 0) 24 else hour
-    case AMPM_OF_DAY        => hour / 12
+    case HOUR_OF_DAY => hour
+    case CLOCK_HOUR_OF_DAY => if (hour == 0) 24 else hour
+    case AMPM_OF_DAY => hour / 12
 
     case _: ChronoField =>
-      throw new UnsupportedTemporalTypeException(s"Field not supported: $field")
+      throw new UnsupportedTemporalTypeException(
+        s"Field not supported: $field")
 
     case _ => field.getFrom(this)
   }
@@ -116,7 +124,8 @@ final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
 
       case MINUTE_OF_DAY =>
         requireDateTime(value >= 0 && value <= MINUTES_IN_DAY, msg)
-        ofNanoOfDay(value * NANOS_IN_MINUTE + second.toLong * NANOS_IN_SECOND + nano)
+        ofNanoOfDay(
+          value * NANOS_IN_MINUTE + second.toLong * NANOS_IN_SECOND + nano)
 
       case HOUR_OF_AMPM =>
         requireDateTime(value >= 0 && value <= 11, msg)
@@ -140,7 +149,8 @@ final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
         new LocalTime(hour % 12 + value.toInt * 12, minute, second, nano)
 
       case _: ChronoField =>
-        throw new UnsupportedTemporalTypeException(s"Field not supported: $field")
+        throw new UnsupportedTemporalTypeException(
+          s"Field not supported: $field")
 
       case _ => field.adjustInto(this, value)
     }
@@ -174,13 +184,15 @@ final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
     amount.addTo(this).asInstanceOf[LocalTime]
 
   def plus(amount: Long, unit: TemporalUnit): LocalTime = unit match {
-    case NANOS     => plusNanos(amount)
-    case MICROS    => plusNanos((amount % MICROS_IN_DAY) * NANOS_IN_MICRO)
-    case MILLIS    => plusNanos((amount % MILLIS_IN_DAY) * NANOS_IN_MILLI)
-    case SECONDS   => plusSeconds(amount)
-    case MINUTES   => plusMinutes(amount)
-    case HOURS     => plusHours(amount)
-    case HALF_DAYS => plusHours((amount % 2) * 12)
+    case ChronoUnit.NANOS => plusNanos(amount)
+    case ChronoUnit.MICROS =>
+      plusNanos((amount % MICROS_IN_DAY) * NANOS_IN_MICRO)
+    case ChronoUnit.MILLIS =>
+      plusNanos((amount % MILLIS_IN_DAY) * NANOS_IN_MILLI)
+    case ChronoUnit.SECONDS => plusSeconds(amount)
+    case ChronoUnit.MINUTES => plusMinutes(amount)
+    case ChronoUnit.HOURS => plusHours(amount)
+    case ChronoUnit.HALF_DAYS => plusHours((amount % 2) * 12)
 
     case _: ChronoUnit =>
       throw new UnsupportedTemporalTypeException(s"Unit not supported: $unit")
@@ -207,21 +219,25 @@ final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
   override def minus(amount: TemporalAmount): LocalTime =
     amount.subtractFrom(this).asInstanceOf[LocalTime]
 
-  override def minus(amount: Long, unit: TemporalUnit): LocalTime = unit match {
-    case NANOS     => minusNanos(amount)
-    case MICROS    => minusNanos((amount % MICROS_IN_DAY) * NANOS_IN_MICRO)
-    case MILLIS    => minusNanos((amount % MILLIS_IN_DAY) * NANOS_IN_MILLI)
-    case SECONDS   => minusSeconds(amount)
-    case MINUTES   => minusMinutes(amount)
-    case HOURS     => minusHours(amount)
-    case HALF_DAYS => minusHours((amount % 2) * 12)
+  override def minus(amount: Long, unit: TemporalUnit): LocalTime =
+    unit match {
+      case ChronoUnit.NANOS => minusNanos(amount)
+      case ChronoUnit.MICROS =>
+        minusNanos((amount % MICROS_IN_DAY) * NANOS_IN_MICRO)
+      case ChronoUnit.MILLIS =>
+        minusNanos((amount % MILLIS_IN_DAY) * NANOS_IN_MILLI)
+      case ChronoUnit.SECONDS => minusSeconds(amount)
+      case ChronoUnit.MINUTES => minusMinutes(amount)
+      case ChronoUnit.HOURS => minusHours(amount)
+      case ChronoUnit.HALF_DAYS => minusHours((amount % 2) * 12)
 
-    case _: ChronoUnit =>
-      throw new UnsupportedTemporalTypeException(s"Unit not supported: $unit")
+      case _: ChronoUnit =>
+        throw new UnsupportedTemporalTypeException(
+          s"Unit not supported: $unit")
 
-    case _ =>
-      super.minus(amount, unit).asInstanceOf[LocalTime]
-  }
+      case _ =>
+        super.minus(amount, unit).asInstanceOf[LocalTime]
+    }
 
   def minusHours(hours: Long): LocalTime = {
     val offset = if (hours < 0) hours % 24 else hours % 24 - 24
@@ -251,16 +267,17 @@ final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
     val endTime = from(end)
     val diff = endTime.totalNanos - totalNanos
     unit match {
-      case NANOS     => diff
-      case MICROS    => diff / NANOS_IN_MICRO
-      case MILLIS    => diff / NANOS_IN_MILLI
-      case SECONDS   => diff / NANOS_IN_SECOND
-      case MINUTES   => diff / NANOS_IN_MINUTE
-      case HOURS     => diff / NANOS_IN_HOUR
-      case HALF_DAYS => diff / (12 * NANOS_IN_HOUR)
+      case ChronoUnit.NANOS => diff
+      case ChronoUnit.MICROS => diff / NANOS_IN_MICRO
+      case ChronoUnit.MILLIS => diff / NANOS_IN_MILLI
+      case ChronoUnit.SECONDS => diff / NANOS_IN_SECOND
+      case ChronoUnit.MINUTES => diff / NANOS_IN_MINUTE
+      case ChronoUnit.HOURS => diff / NANOS_IN_HOUR
+      case ChronoUnit.HALF_DAYS => diff / (12 * NANOS_IN_HOUR)
 
       case _: ChronoUnit =>
-        throw new UnsupportedTemporalTypeException(s"Unit not supported: $unit")
+        throw new UnsupportedTemporalTypeException(
+          s"Unit not supported: $unit")
 
       case _ => unit.between(this, endTime)
     }
@@ -287,7 +304,7 @@ final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
 
   override def equals(that: Any): Boolean = that match {
     case that: LocalTime => totalNanos == that.totalNanos
-    case _               => false
+    case _ => false
   }
 
   override def hashCode(): Int = totalNanos.hashCode
@@ -306,6 +323,28 @@ final class LocalTime private (hour: Int, minute: Int, second: Int, nano: Int)
     }
     prefix + secondPart + nanoPart
   }
+
+  def writeExternal(out: DataOutput): Unit = {
+    if (nano == 0) {
+      if (second == 0) {
+        if (minute == 0) {
+          out.writeByte(~hour)
+        } else {
+          out.writeByte(hour)
+          out.writeByte(~minute)
+        }
+      } else {
+        out.writeByte(hour)
+        out.writeByte(minute)
+        out.writeByte(~second)
+      }
+    } else {
+      out.writeByte(hour)
+      out.writeByte(minute)
+      out.writeByte(second)
+      out.writeInt(nano)
+    }
+  }
 }
 
 object LocalTime {
@@ -313,13 +352,26 @@ object LocalTime {
   import Constants._
   import ChronoField._
 
-  val MIN = new LocalTime(0, 0, 0, 0)
-
+  val HOURS = new Array[LocalTime](24)
+  for (i ← 0 to HOURS.length) {
+    HOURS(i) = new LocalTime(i, 0, 0, 0)
+  }
+  val MIN = HOURS(0)
   val MAX = new LocalTime(23, 59, 59, 999999999)
-
-  val MIDNIGHT = MIN
-
-  val NOON = new LocalTime(12, 0, 0, 0)
+  val MIDNIGHT = HOURS(0)
+  val NOON = HOURS(12)
+  val HOURS_PER_DAY: Int = 24
+  val MINUTES_PER_HOUR: Int = 60
+  val MINUTES_PER_DAY: Int = MINUTES_PER_HOUR * HOURS_PER_DAY
+  val SECONDS_PER_MINUTE: Int = 60
+  val SECONDS_PER_HOUR: Int = SECONDS_PER_MINUTE * MINUTES_PER_HOUR
+  val SECONDS_PER_DAY: Int = SECONDS_PER_HOUR * HOURS_PER_DAY
+  val MILLIS_PER_DAY: Long = SECONDS_PER_DAY * 1000L
+  val MICROS_PER_DAY: Long = SECONDS_PER_DAY * 1000000L
+  val NANOS_PER_SECOND: Long = 1000000000L
+  val NANOS_PER_MINUTE: Long = NANOS_PER_SECOND * SECONDS_PER_MINUTE
+  val NANOS_PER_HOUR: Long = NANOS_PER_MINUTE * MINUTES_PER_HOUR
+  val NANOS_PER_DAY: Long = NANOS_PER_HOUR * HOURS_PER_DAY
 
   def now(): LocalTime = {
     val date = new js.Date()
@@ -344,14 +396,25 @@ object LocalTime {
 
   def ofSecondOfDay(secondOfDay: Long): LocalTime = {
     requireDateTime(secondOfDay >= 0 && secondOfDay < SECONDS_IN_DAY,
-      s"Invalid value for secondOfDay: $secondOfDay")
+                    s"Invalid value for secondOfDay: $secondOfDay")
 
     ofNanoOfDay(secondOfDay * 1000000000)
   }
 
+  def ofSecondOfDay(secondOfDay: Long, nanoOfSecond: Int): LocalTime = {
+    SECOND_OF_DAY.checkValidValue(secondOfDay)
+    NANO_OF_SECOND.checkValidValue(nanoOfSecond)
+    val hours = (secondOfDay / SECONDS_PER_HOUR).toInt
+    var sOfDay: Long = secondOfDay
+    sOfDay -= hours * SECONDS_PER_HOUR
+    val minutes = (secondOfDay / SECONDS_PER_MINUTE).toInt
+    sOfDay -= minutes * SECONDS_PER_MINUTE
+    create(hours, minutes, sOfDay.toInt, nanoOfSecond)
+  }
+
   def ofNanoOfDay(nanoOfDay: Long): LocalTime = {
     requireDateTime(nanoOfDay >= 0 && nanoOfDay < NANOS_IN_DAY,
-      s"Invalid value for nanoOfDay: $nanoOfDay")
+                    s"Invalid value for nanoOfDay: $nanoOfDay")
 
     val nano = nanoOfDay % NANOS_IN_SECOND
     val seconds = nanoOfDay / NANOS_IN_SECOND
@@ -362,6 +425,16 @@ object LocalTime {
     new LocalTime(hour.toInt, minute.toInt, second.toInt, nano.toInt)
   }
 
+  private def create(hour: Int,
+                     minute: Int,
+                     second: Int,
+                     nanoOfSecond: Int): LocalTime = {
+    if ((minute | second | nanoOfSecond) == 0)
+      HOURS(hour)
+    else
+      new LocalTime(hour, minute, second, nanoOfSecond)
+  }
+
   def from(temporal: TemporalAccessor): LocalTime =
     ofNanoOfDay(temporal.getLong(NANO_OF_DAY))
 
@@ -370,4 +443,27 @@ object LocalTime {
 
   // Not implemented
   // def parse(text: CharSequence, formatter: DateTimeFormatter): LocalTime
+
+  def readExternal(in: DataInput): LocalTime = {
+    var hour: Byte = in.readByte()
+    var minute: Byte = 0
+    var second: Byte = 0
+    var nano: Int = 0
+    if (hour < 0) {
+      hour = ~hour
+    } else {
+      minute = in.readByte()
+      if (minute < 0) {
+        minute = ~minute
+      } else {
+        second = in.readByte()
+        if (second < 0) {
+          second = ~second
+        } else {
+          nano = in.readInt()
+        }
+      }
+    }
+    LocalTime.of(hour, minute, second, nano)
+  }
 }

@@ -128,9 +128,11 @@ abstract class ChronoLocalDateTime[D <: ChronoLocalDate]
     }
   }
 
-  override def hashCode: Int = toLocalDate().hashCode() ^ toLocalTime().hashCode()
+  override def hashCode: Int =
+    toLocalDate().hashCode() ^ toLocalTime().hashCode()
 
-  override def toString(): String = toLocalDate().toString() + 'T' + toLocalTime().toString()
+  override def toString(): String =
+    toLocalDate().toString() + 'T' + toLocalTime().toString()
 
 }
 
@@ -143,13 +145,11 @@ object ChronoLocalDateTime {
       override def compare(datetime1: ChronoLocalDateTime[_],
                            datetime2: ChronoLocalDateTime[_]): Int = {
         datetime1.toLocalDate.toEpochDay()
-        var cmp = Jdk8Methods.compareLongs(
-          datetime1.toLocalDate().toEpochDay(),
-          datetime2.toLocalDate().toEpochDay());
+        var cmp = Utils.compareLongs(datetime1.toLocalDate().toEpochDay(),
+                                     datetime2.toLocalDate().toEpochDay());
         if (cmp == 0) {
-          cmp = Jdk8Methods.compareLongs(
-            datetime1.toLocalTime().toNanoOfDay(),
-            datetime2.toLocalTime().toNanoOfDay());
+          cmp = Utils.compareLongs(datetime1.toLocalTime().toNanoOfDay(),
+                                   datetime2.toLocalTime().toNanoOfDay());
         }
         cmp
       }

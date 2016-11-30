@@ -9,7 +9,7 @@
 package java.time.format
 
 import java.text.{DateFormat, SimpleDateFormat}
-import java.time.{DateTimeException, LocalDateTime, ZoneOffset}
+import java.time.{DateTimeException, LocalDateTime, Utils, ZoneOffset}
 import java.time.chrono.Chronology
 import java.time.format.DateTimeFormatterBuilder.{
   DateTimePrinterParser,
@@ -275,11 +275,16 @@ object DateTimeFormatterBuilder {
       var inNano = NANO_OF_SECOND.checkValidIntValue(inNanos)
       if (inSec >= -SECONDS_0000_TO_1970) {
         // current era
-        val zeroSecs = inSec - SECONDS_PER_10000_YEARS + SECONDS_0000_TO_1970
-        val hi = Jdk8Methods.floorDiv(zeroSecs, SECONDS_PER_10000_YEARS) + 1
-        val lo = Jdk8Methods.floorMod(zeroSecs, SECONDS_PER_10000_YEARS)
-        val ldt: LocalDateTime = LocalDateTime
-          .ofEpochSecond(lo - SECONDS_0000_TO_1970, 0, ZoneOffset.UTC)
+        val zeroSecs = inSec - InstantPrinterParser.SECONDS_PER_10000_YEARS + InstantPrinterParser.SECONDS_0000_TO_1970
+        val hi = Utils.floorDiv(
+            zeroSecs,
+            InstantPrinterParser.SECONDS_PER_10000_YEARS) + 1
+        val lo = Utils
+          .floorMod(zeroSecs, InstantPrinterParser.SECONDS_PER_10000_YEARS)
+        val ldt: LocalDateTime = LocalDateTime.ofEpochSecond(
+          lo - InstantPrinterParser.SECONDS_0000_TO_1970,
+          0,
+          ZoneOffset.UTC)
         if (hi > 0) {
           buf.append('+').append(hi)
         }
@@ -289,11 +294,13 @@ object DateTimeFormatterBuilder {
         }
       } else {
         // before current era
-        val zeroSecs = inSec + SECONDS_0000_TO_1970
-        val hi = zeroSecs / SECONDS_PER_10000_YEARS
-        val lo = zeroSecs % SECONDS_PER_10000_YEARS
-        val ldt: LocalDateTime = LocalDateTime
-          .ofEpochSecond(lo - SECONDS_0000_TO_1970, 0, ZoneOffset.UTC)
+        val zeroSecs = inSec + InstantPrinterParser.SECONDS_0000_TO_1970
+        val hi: Long = zeroSecs / InstantPrinterParser.SECONDS_PER_10000_YEARS
+        val lo = zeroSecs % InstantPrinterParser.SECONDS_PER_10000_YEARS
+        val ldt: LocalDateTime = LocalDateTime.ofEpochSecond(
+          lo - InstantPrinterParser.SECONDS_0000_TO_1970,
+          0,
+          ZoneOffset.UTC)
         val pos = buf.length()
         buf.append(ldt)
         if (ldt.getSecond() == 0) {
@@ -301,7 +308,7 @@ object DateTimeFormatterBuilder {
         }
         if (hi < 0) {
           if (ldt.getYear() == -10000) {
-            buf.replace(pos, pos + 2, Long.toString(hi - 1))
+            buf.replace(pos, pos + 2, (hi - 1).toString)
           } else if (lo == 0) {
             buf.insert(pos, hi)
           } else {
@@ -326,14 +333,16 @@ object DateTimeFormatterBuilder {
       } else if (fractionalDigits > 0 || (fractionalDigits == -1 && inNano > 0)) {
         buf.append('.')
         var div = 100000000
-        for (i ← 0 to ((fractionalDigits == -1 && inNano > 0) || i < fractionalDigits)) {
-          var digit = inNano / div
-          buf.append((char)(digit + '0'))
+        var i = 0
+        while ((fractionalDigits == -1 && inNano > 0) || i < fractionalDigits) {
+          var digit: Int = inNano / div
+          buf.append(digit + '0')
           inNano = inNano - (digit * div)
           div = div / 10
+          i += 1
         }
       }
-      buf.append('Z');
+      buf.append('Z')
       true
     }
 
@@ -358,44 +367,48 @@ object DateTimeFormatterBuilder {
         .toPrinterParser(false)
       val pos = parser.parse(newContext, text, position)
       if (pos < 0) {
-        return pos
-      }
-      // parser restricts most fields to 2 digits, so definitely int
-      // correctly parsed nano is also guaranteed to be valid
-      val yearParsed = newContext.getParsed(YEAR)
-      val month = newContext.getParsed(MONTH_OF_YEAR).intValue()
-      val day = newContext.getParsed(DAY_OF_MONTH).intValue()
-      var hour = newContext.getParsed(HOUR_OF_DAY).intValue()
-      val min = newContext.getParsed(MINUTE_OF_HOUR).intValue()
-      val secVal = newContext.getParsed(SECOND_OF_MINUTE)
-      val nanoVal = newContext.getParsed(NANO_OF_SECOND)
-      var sec = if (secVal != null) secVal.intValue() else 0
-      val nano = if (nanoVal != null) nanoVal.intValue() else 0
-      val year = yearParsed % 10000
-      var days = 0
-      if (hour == 24 && min == 0 && sec == 0 && nano == 0) {
-        hour = 0;
-        days = 1;
-      } else if (hour == 23 && min == 59 && sec == 60) {
-        context.setParsedLeapSecond();
-        sec = 59;
-      }
-      try {
-        val ldt =
-          LocalDateTime.of(year, month, day, hour, min, sec, 0).plusDays(days)
-        var instantSecs = ldt.toEpochSecond(ZoneOffset.UTC)
-        instantSecs += Jdk8Methods.safeMultiply(yearParsed / 10000L,
-                                                SECONDS_PER_10000_YEARS)
-        var successPos = pos
-        successPos = context
-          .setParsedField(INSTANT_SECONDS, instantSecs, position, successPos)
-        context.setParsedField(NANO_OF_SECOND, nano, position, successPos)
-      } catch (RuntimeException ex) {
-        ~position
+        pos
+      } else {
+        // parser restricts most fields to 2 digits, so definitely int
+        // correctly parsed nano is also guaranteed to be valid
+        val yearParsed = newContext.getParsed(YEAR)
+        val month = newContext.getParsed(MONTH_OF_YEAR).intValue()
+        val day = newContext.getParsed(DAY_OF_MONTH).intValue()
+        var hour = newContext.getParsed(HOUR_OF_DAY).intValue()
+        val min = newContext.getParsed(MINUTE_OF_HOUR).intValue()
+        val secVal = newContext.getParsed(SECOND_OF_MINUTE)
+        val nanoVal = newContext.getParsed(NANO_OF_SECOND)
+        var sec = if (secVal != null) secVal.intValue() else 0
+        val nano = if (nanoVal != null) nanoVal.intValue() else 0
+        val year = (yearParsed % 10000).toInt
+        var days = 0
+        if (hour == 24 && min == 0 && sec == 0 && nano == 0) {
+          hour = 0
+          days = 1
+        } else if (hour == 23 && min == 59 && sec == 60) {
+          context.setParsedLeapSecond()
+          sec = 59
+        }
+        try {
+          val ldt =
+            LocalDateTime
+              .of(year, month, day, hour, min, sec, 0)
+              .plusDays(days)
+          var instantSecs = ldt.toEpochSecond(ZoneOffset.UTC)
+          instantSecs += Utils.safeMultiply(yearParsed / 10000L,
+                                            SECONDS_PER_10000_YEARS)
+          var successPos = pos
+          successPos = context
+            .setParsedField(INSTANT_SECONDS, instantSecs, position, successPos)
+          context.setParsedField(NANO_OF_SECOND, nano, position, successPos)
+        } catch {
+          case _: RuntimeException ⇒ ~position
+        }
+
       }
     }
 
-    override def toString() = "Instant()"
+    override def toString(): String = "Instant()"
   }
 
 }

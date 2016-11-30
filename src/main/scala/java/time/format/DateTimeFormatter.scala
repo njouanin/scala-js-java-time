@@ -9,10 +9,11 @@
 package java.time.format
 
 import java.time.ZoneId
-import java.time.chrono.Chronology
+import java.time.chrono.{Chronology, IsoChronology}
 import java.time.format.DateTimeFormatterBuilder.CompositePrinterParser
 import java.time.temporal.{TemporalAccessor, TemporalField}
 import java.util.Locale
+import java.time.temporal.ChronoField._
 
 class DateTimeFormatter private (
     private[this] val printerParser: CompositePrinterParser,
@@ -52,4 +53,22 @@ object DateTimeFormatter {
     .parseCaseInsensitive()
     .appendInstant()
     .toFormatter(ResolverStyle.STRICT)
+
+  val ISO_LOCAL_DATE = new DateTimeFormatterBuilder()
+    .appendValue(YEAR, 4, 10, SignStyle.EXCEEDS_PAD)
+    .appendLiteral('-')
+    .appendValue(MONTH_OF_YEAR, 2)
+    .appendLiteral('-')
+    .appendValue(DAY_OF_MONTH, 2)
+    .toFormatter(ResolverStyle.STRICT)
+    .withChronology(IsoChronology.INSTANCE)
+
+  val ISO_LOCAL_DATE_TIME = new DateTimeFormatterBuilder()
+    .parseCaseInsensitive()
+    .append(ISO_LOCAL_DATE)
+    .appendLiteral('T')
+    .append(ISO_LOCAL_TIME)
+    .toFormatter(ResolverStyle.STRICT)
+    .withChronology(IsoChronology.INSTANCE)
+
 }

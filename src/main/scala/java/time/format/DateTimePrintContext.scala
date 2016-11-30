@@ -33,4 +33,6 @@ final class DateTimePrintContext(temporal: TemporalAccessor,
     result
   }
 
+  def getTemporal(): TemporalAccessor = temporal
+
 }
