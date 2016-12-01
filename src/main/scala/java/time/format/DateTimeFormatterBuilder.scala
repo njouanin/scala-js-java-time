@@ -8,17 +8,13 @@
  */
 package java.time.format
 
+import java.math.BigInteger
 import java.text.{DateFormat, SimpleDateFormat}
 import java.time.{DateTimeException, LocalDateTime, Utils, ZoneOffset}
 import java.time.chrono.Chronology
-import java.time.format.DateTimeFormatterBuilder.{
-  DateTimePrinterParser,
-  InstantPrinterParser,
-  PadPrinterParserDecorator,
-  SettingsParser
-}
+import java.time.format.DateTimeFormatterBuilder._
 import java.time.format.FormatStyle.FormatStyle
-import java.time.temporal.ChronoField
+import java.time.temporal.{ChronoField, TemporalField}
 import java.util
 import java.util.{Locale, Objects}
 import java.time.temporal.ChronoField._
@@ -51,6 +47,83 @@ final class DateTimeFormatterBuilder private (
     this;
   }
 
+  def appendValue(field: TemporalField): DateTimeFormatterBuilder = {
+    Objects.requireNonNull(field, "field")
+    appendValue(new NumberPrinterParser(field, 1, 19, SignStyle.NORMAL))
+  }
+
+  def appendValue(field: TemporalField, width: Int): DateTimeFormatterBuilder = {
+    Objects.requireNonNull(field, "field")
+    if (width < 1 || width > 19) {
+      throw new IllegalArgumentException(
+        s"The width must be from 1 to 19 inclusive but was $width")
+    }
+    val pp =
+      new NumberPrinterParser(field, width, width, SignStyle.NOT_NEGATIVE)
+    appendValue(pp)
+    this
+  }
+
+  def appendValue(field: TemporalField,
+                  minWidth: Int,
+                  maxWidth: Int,
+                  signStyle: SignStyle): DateTimeFormatterBuilder = {
+    if (minWidth == maxWidth && signStyle == SignStyle.NOT_NEGATIVE) {
+      appendValue(field, maxWidth)
+    } else {
+      Objects.requireNonNull(field, "field")
+      Objects.requireNonNull(signStyle, "signStyle")
+      if (minWidth < 1 || minWidth > 19) {
+        throw new IllegalArgumentException(
+          s"The minimum width must be from 1 to 19 inclusive but was $minWidth")
+      }
+      if (maxWidth < 1 || maxWidth > 19) {
+        throw new IllegalArgumentException(
+          s"The maximum width must be from 1 to 19 inclusive but was $maxWidth")
+      }
+      if (maxWidth < minWidth) {
+        throw new IllegalArgumentException(
+          s"The maximum width must exceed or equal the minimum width but $maxWidth < $minWidth")
+      }
+      val pp = new NumberPrinterParser(field, minWidth, maxWidth, signStyle)
+      appendValue(pp)
+      this
+    }
+  }
+
+  private def appendValue(pp: NumberPrinterParser): DateTimeFormatterBuilder = {
+    if (active.valueParserIndex >= 0 &&
+        active.printerParsers
+          .get(active.valueParserIndex)
+          .isInstanceOf[NumberPrinterParser]) {
+      val activeValueParser = active.valueParserIndex
+
+      // adjacent parsing mode, update setting in previous parsers
+      var basePP = active.printerParsers
+        .get(activeValueParser)
+        .asInstanceOf[NumberPrinterParser]
+      if (pp.minWidth == pp.maxWidth && pp.signStyle == SignStyle.NOT_NEGATIVE) {
+        // Append the width to the subsequentWidth of the active parser
+        basePP = basePP.withSubsequentWidth(pp.maxWidth)
+        // Append the new parser as a fixed width
+        appendInternal(pp.withFixedWidth())
+        // Retain the previous active parser
+        active.valueParserIndex = activeValueParser
+      } else {
+        // Modify the active parser to be fixed width
+        basePP = basePP.withFixedWidth()
+        // The new parser becomes the mew active parser
+        active.valueParserIndex = appendInternal(pp)
+      }
+      // Replace the modified parser with the updated one
+      active.printerParsers.set(activeValueParser, basePP)
+    } else {
+      // The new Parser becomes the active parser
+      active.valueParserIndex = appendInternal(pp)
+    }
+    this
+  }
+
   private def appendInternal(pp: DateTimePrinterParser): Integer = {
     Objects.requireNonNull(pp, "pp")
     active.printerParsers.add(if (active.padNextWidth > 0) {
@@ -63,6 +136,29 @@ final class DateTimeFormatterBuilder private (
     } else pp)
     active.valueParserIndex = -1
     active.printerParsers.size() - 1
+  }
+
+  def append(formatter: DateTimeFormatter): DateTimeFormatterBuilder = {
+    Objects.requireNonNull(formatter, "formatter")
+    appendInternal(formatter.toPrinterParser(false))
+    this
+  }
+
+  def appendLiteral(literal: Char): DateTimeFormatterBuilder = {
+    appendInternal(new CharLiteralPrinterParser(literal))
+    this
+  }
+
+  def appendLiteral(literal: String): DateTimeFormatterBuilder = {
+    Objects.requireNonNull(literal, "literal")
+    if (literal.length() > 0) {
+      if (literal.length() == 1) {
+        appendInternal(new CharLiteralPrinterParser(literal.charAt(0)))
+      } else {
+        appendInternal(new StringLiteralPrinterParser(literal))
+      }
+    }
+    this
   }
 }
 
@@ -418,6 +514,217 @@ object DateTimeFormatterBuilder {
     }
 
     override def toString(): String = "Instant()"
+  }
+
+  class NumberPrinterParser(protected[format] val field: TemporalField,
+                            protected[format] val minWidth: Int,
+                            protected[format] val maxWidth: Int,
+                            protected[format] val signStyle: SignStyle,
+                            protected[format] val subsequentWidth: Int = 0)
+      extends DateTimePrinterParser {
+
+    def withFixedWidth(): NumberPrinterParser = {
+      if (subsequentWidth == -1) {
+        this
+      } else
+        new NumberPrinterParser(field, minWidth, maxWidth, signStyle, -1)
+    }
+
+    def withSubsequentWidth(subsequentWidth: Int): NumberPrinterParser =
+      new NumberPrinterParser(field,
+                              minWidth,
+                              maxWidth,
+                              signStyle,
+                              this.subsequentWidth + subsequentWidth)
+
+    override def print(context: DateTimePrintContext,
+                       buf: StringBuilder): Boolean = {
+      val valueLong = context.getValue(field)
+      if (valueLong == null) {
+        false
+      } else {
+        val value = getValue(context, valueLong)
+        val symbols = context.getSymbols()
+        var str =
+          if (value == Long.MinValue) "9223372036854775808"
+          else Math.abs(value).toString
+        if (str.length() > maxWidth) {
+          throw new DateTimeException(
+            s"Field $field cannot be printed as the value $value  exceeds the maximum print width of $maxWidth")
+        }
+        str = symbols.convertNumberToI18N(str)
+
+        if (value >= 0) {
+          signStyle match {
+            case SignStyle.EXCEEDS_PAD ⇒
+              if (minWidth < 19 && value >= NumberPrinterParser.EXCEED_POINTS(
+                    minWidth))
+                buf.append(symbols.getPositiveSign())
+            case SignStyle.ALWAYS ⇒ buf.append(symbols.getPositiveSign())
+          }
+        } else {
+          signStyle match {
+            case SignStyle.NORMAL | SignStyle.EXCEEDS_PAD | SignStyle.ALWAYS ⇒
+              buf.append(symbols.getNegativeSign())
+            case SignStyle.NOT_NEGATIVE =>
+              throw new DateTimeException(
+                "Field $field cannot be printed as the value $value cannot be negative according to the SignStyle")
+          }
+        }
+        for (i <- 0 to (minWidth - str.length())) {
+          buf.append(symbols.getZeroDigit())
+        }
+        buf.append(str)
+        true
+      }
+    }
+
+    def getValue(context: DateTimePrintContext, value: Long): Long = value
+
+    def isFixedWidth(context: DateTimeParseContext): Boolean =
+      subsequentWidth == -1 ||
+        (subsequentWidth > 0 && minWidth == maxWidth && signStyle == SignStyle.NOT_NEGATIVE)
+
+    override def parse(context: DateTimeParseContext,
+                       text: CharSequence,
+                       p: Int): Int = {
+      var position = p
+      val length = text.length()
+      if (position == length) {
+        return ~position
+      }
+      val sign = text.charAt(position); // IOOBE if invalid position
+      var negative = false
+      var positive = false
+      if (sign == context.getSymbols().getPositiveSign()) {
+        if (signStyle.parse(true, context.isStrict(), minWidth == maxWidth) == false) {
+          return ~position
+        }
+        positive = true
+        position += 1
+      } else if (sign == context.getSymbols().getNegativeSign()) {
+        if (signStyle.parse(false, context.isStrict(), minWidth == maxWidth) == false) {
+          return ~position
+        }
+        negative = true
+        position += 1
+      } else {
+        if (signStyle == SignStyle.ALWAYS && context.isStrict()) {
+          return ~position
+        }
+      }
+      val effMinWidth =
+        if (context.isStrict() || isFixedWidth(context)) minWidth else 1
+      val minEndPos = position + effMinWidth
+      if (minEndPos > length) {
+        return ~position
+      }
+      var effMaxWidth = (if (context.isStrict() || isFixedWidth(context))
+                           maxWidth
+                         else 9) + Math.max(subsequentWidth, 0)
+      var total = 0;
+      var totalBig: BigInteger = null
+      var pos = position
+      var stop = false
+      for (pass <- 0 to 2 if !stop) {
+        val maxEndPos = Math.min(pos + effMaxWidth, length)
+        while (pos < maxEndPos && !stop) {
+          pos += 1
+          val ch = text.charAt(pos)
+          val digit = context.getSymbols().convertToDigit(ch)
+          if (digit < 0) {
+            pos -= 1
+            if (pos < minEndPos) {
+              return ~position
+            }
+            stop = true
+          }
+          if ((pos - position) > 18) {
+            if (totalBig == null) {
+              totalBig = BigInteger.valueOf(total)
+            }
+            totalBig =
+              totalBig.multiply(BigInteger.TEN).add(BigInteger.valueOf(digit))
+          } else {
+            total = total * 10 + digit
+          }
+        }
+        if (subsequentWidth > 0 && pass == 0) {
+          // re-parse now we know the correct width
+          val parseLen = pos - position
+          effMaxWidth = Math.max(effMinWidth, parseLen - subsequentWidth)
+          pos = position
+          total = 0
+          totalBig = null
+        } else {
+          stop = true
+        }
+      }
+      if (negative) {
+        if (totalBig != null) {
+          if (totalBig.equals(BigInteger.ZERO) && context.isStrict()) {
+            return ~(position - 1)
+          }
+          totalBig = totalBig.negate()
+        } else {
+          if (total == 0 && context.isStrict()) {
+            return ~(position - 1)
+          }
+          total = -total
+        }
+      } else if (signStyle == SignStyle.EXCEEDS_PAD && context.isStrict()) {
+        val parseLen = pos - position
+        if (positive) {
+          if (parseLen <= minWidth) {
+            return ~(position - 1)
+          }
+        } else {
+          if (parseLen > minWidth) {
+            return ~position
+          }
+        }
+      }
+      if (totalBig != null) {
+        if (totalBig.bitLength() > 63) {
+          // overflow, parse 1 less digit
+          totalBig = totalBig.divide(BigInteger.TEN)
+          pos -= 1
+        }
+        return setValue(context, totalBig.longValue(), position, pos)
+      }
+      return setValue(context, total, position, pos)
+    }
+
+    def setValue(context: DateTimeParseContext,
+                 value: Long,
+                 errorPos: Int,
+                 successPos: Int): Int =
+      context.setParsedField(field, value, errorPos, successPos)
+
+    override def toString(): String = {
+      if (minWidth == 1 && maxWidth == 19 && signStyle == SignStyle.NORMAL) {
+        return s"Value($field)"
+      }
+      if (minWidth == maxWidth && signStyle == SignStyle.NOT_NEGATIVE) {
+        return s"Value($field,$minWidth)"
+      }
+      return s"Value($field,$minWidth,$maxWidth,$signStyle)"
+    }
+  }
+
+  object NumberPrinterParser {
+    val EXCEED_POINTS = Array[Int](
+      0,
+      10,
+      100,
+      1000,
+      10000,
+      100000,
+      1000000,
+      10000000,
+      100000000,
+      1000000000
+    )
   }
 
 }
