@@ -2,7 +2,7 @@ package java.time.chrono
 
 import scala.collection.JavaConverters._
 import scala.scalajs.js
-import java.time.{DateTimeException, Period}
+import java.time.{DateTimeException, LocalTime, Period}
 import java.time.temporal.{ChronoField, Temporal, TemporalAccessor, ValueRange}
 import java.{util ⇒ ju}
 
@@ -38,7 +38,18 @@ trait Chronology extends Comparable[Chronology] {
   def date(temporal: TemporalAccessor): ChronoLocalDate
 
   // TODO
-  // def localDateTime(temporal: TemporalAccessor): ChronoLocalDateTime[_]
+  def localDateTime(temporal: TemporalAccessor): ChronoLocalDateTime[_] = {
+    try {
+      val d = date(temporal)
+      d.atTime(LocalTime.from(temporal))
+    } catch {
+      case ex: DateTimeException ⇒
+        throw new DateTimeException(
+          "Unable to obtain ChronoLocalDateTime from TemporalAccessor: " + temporal
+            .getClass(),
+          ex)
+    }
+  }
 
   // Not implemented
   // def zonedDateTime(temporal: TemporalAccessor): ChronoZonedDateTime[_]

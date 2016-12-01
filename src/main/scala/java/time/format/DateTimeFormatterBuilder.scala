@@ -13,10 +13,12 @@ import java.time.{DateTimeException, LocalDateTime, Utils, ZoneOffset}
 import java.time.chrono.Chronology
 import java.time.format.DateTimeFormatterBuilder.{
   DateTimePrinterParser,
+  InstantPrinterParser,
   PadPrinterParserDecorator,
   SettingsParser
 }
 import java.time.format.FormatStyle.FormatStyle
+import java.time.temporal.ChronoField
 import java.util
 import java.util.{Locale, Objects}
 import java.time.temporal.ChronoField._
@@ -45,7 +47,7 @@ final class DateTimeFormatterBuilder private (
   }
 
   def appendInstant(): DateTimeFormatterBuilder = {
-    appendInternal(new InstantPrinterParser(-2));
+    appendInternal(new InstantPrinterParser(-2))
     this;
   }
 
@@ -262,18 +264,19 @@ object DateTimeFormatterBuilder {
     override def print(context: DateTimePrintContext,
                        buf: StringBuilder): Boolean = {
       // use INSTANT_SECONDS, thus this code is not bound by Instant.MAX
-      val inSecs = context.getValue(INSTANT_SECONDS)
-      val inNanos = if (context.getTemporal().isSupported(NANO_OF_SECOND)) {
-        context.getTemporal().getLong(NANO_OF_SECOND)
-      } else
-        0L
+      val inSecs = context.getValue(ChronoField.INSTANT_SECONDS)
+      val inNanos =
+        if (context.getTemporal().isSupported(ChronoField.NANO_OF_SECOND)) {
+          context.getTemporal().getLong(ChronoField.NANO_OF_SECOND)
+        } else
+          0L
 
       if (inSecs == null) {
         return false
       }
       val inSec = inSecs
-      var inNano = NANO_OF_SECOND.checkValidIntValue(inNanos)
-      if (inSec >= -SECONDS_0000_TO_1970) {
+      var inNano = ChronoField.NANO_OF_SECOND.checkValidIntValue(inNanos)
+      if (inSec >= -InstantPrinterParser.SECONDS_0000_TO_1970) {
         // current era
         val zeroSecs = inSec - InstantPrinterParser.SECONDS_PER_10000_YEARS + InstantPrinterParser.SECONDS_0000_TO_1970
         val hi = Utils.floorDiv(
@@ -395,12 +398,18 @@ object DateTimeFormatterBuilder {
               .of(year, month, day, hour, min, sec, 0)
               .plusDays(days)
           var instantSecs = ldt.toEpochSecond(ZoneOffset.UTC)
-          instantSecs += Utils.safeMultiply(yearParsed / 10000L,
-                                            SECONDS_PER_10000_YEARS)
+          instantSecs += Utils.safeMultiply(
+            yearParsed / 10000L,
+            InstantPrinterParser.SECONDS_PER_10000_YEARS)
           var successPos = pos
-          successPos = context
-            .setParsedField(INSTANT_SECONDS, instantSecs, position, successPos)
-          context.setParsedField(NANO_OF_SECOND, nano, position, successPos)
+          successPos = context.setParsedField(ChronoField.INSTANT_SECONDS,
+                                              instantSecs,
+                                              position,
+                                              successPos)
+          context.setParsedField(ChronoField.NANO_OF_SECOND,
+                                 nano,
+                                 position,
+                                 successPos)
         } catch {
           case _: RuntimeException ⇒ ~position
         }

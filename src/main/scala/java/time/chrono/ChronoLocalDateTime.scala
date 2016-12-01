@@ -9,10 +9,9 @@
 package java.time.chrono
 
 import java.time.format.DateTimeFormatter
-import java.time._
+import java.time.{temporal, _}
 import java.time.temporal._
 import java.util.{Comparator, Objects}
-import ChronoField._
 
 abstract class ChronoLocalDateTime[D <: ChronoLocalDate]
     extends Temporal
@@ -49,23 +48,28 @@ abstract class ChronoLocalDateTime[D <: ChronoLocalDate]
       .ensureChronoLocalDateTime(super.minus(amountToSubtract, unit))
 
   override def query[R](query: TemporalQuery[R]): R = {
-    query match {
-      case TemporalQueries.chronology() ⇒ getChronology()
-      case TemporalQueries.precision() ⇒ NANOS;
-      case TemporalQueries.localDate() ⇒
-        LocalDate.ofEpochDay(toLocalDate().toEpochDay())
-      case TemporalQueries.localTime() ⇒ toLocalTime()
-      case TemporalQueries.zone() | TemporalQueries.zoneId() |
-          TemporalQueries.offset() ⇒
-        null
-      case _ ⇒ super.query(query)
+    if (query == TemporalQueries.chronology()) {
+      return getChronology().asInstanceOf[R]
+    } else if (query == TemporalQueries.precision()) {
+      return ChronoUnit.NANOS.asInstanceOf[R]
+    } else if (query == TemporalQueries.localDate()) {
+      return LocalDate.ofEpochDay(toLocalDate().toEpochDay()).asInstanceOf[R]
+    } else if (query == TemporalQueries.localTime()) {
+      return toLocalTime().asInstanceOf[R]
+    } else if (query == TemporalQueries.zone() || query == TemporalQueries
+                 .zoneId() || query == TemporalQueries.offset()) {
+      return null.asInstanceOf[R]
     }
+    return super.query(query);
   }
 
-  override def adjustInto(temporal: Temporal): Temporal =
+  override def adjustInto(temporal: Temporal): Temporal = {
+    val date: ChronoLocalDate = toLocalDate()
     temporal
-      .`with`(EPOCH_DAY, toLocalDate().toEpochDay())
-      .`with`(NANO_OF_DAY, toLocalTime().toNanoOfDay())
+      .`with`(ChronoField.EPOCH_DAY, date.toEpochDay())
+      .`with`(ChronoField.NANO_OF_DAY, toLocalTime().toNanoOfDay())
+
+  }
 
   def format(formatter: DateTimeFormatter): String = {
     Objects.requireNonNull(formatter, "formatter")
@@ -85,7 +89,9 @@ abstract class ChronoLocalDateTime[D <: ChronoLocalDate]
   }
 
   override def compareTo(other: ChronoLocalDateTime[_]): Int = {
-    var cmp = toLocalDate().compareTo(other.toLocalDate())
+    val date: ChronoLocalDate = toLocalDate()
+    val oDate = other.toLocalDate()
+    var cmp = date.compareTo(oDate.asInstanceOf[D])
     if (cmp == 0) {
       cmp = toLocalTime().compareTo(other.toLocalTime())
       if (cmp == 0) {
@@ -96,8 +102,10 @@ abstract class ChronoLocalDateTime[D <: ChronoLocalDate]
   }
 
   def isAfter(other: ChronoLocalDateTime[_]): Boolean = {
-    val thisEpDay = this.toLocalDate().toEpochDay()
-    val otherEpDay = other.toLocalDate().toEpochDay()
+    val date: ChronoLocalDate = this.toLocalDate()
+    val thisEpDay = date.toEpochDay()
+    val oDate = other.toLocalDate()
+    val otherEpDay = oDate.asInstanceOf[D].toEpochDay()
     thisEpDay > otherEpDay ||
     (thisEpDay == otherEpDay && this.toLocalTime().toNanoOfDay() > other
       .toLocalTime()
@@ -105,7 +113,7 @@ abstract class ChronoLocalDateTime[D <: ChronoLocalDate]
   }
   def isBefore(other: ChronoLocalDateTime[_]): Boolean = {
     val thisEpDay = this.toLocalDate().toEpochDay()
-    val otherEpDay = other.toLocalDate().toEpochDay()
+    val otherEpDay = other.toLocalDate().asInstanceOf[D].toEpochDay()
     thisEpDay < otherEpDay ||
     (thisEpDay == otherEpDay && this.toLocalTime().toNanoOfDay() < other
       .toLocalTime()
@@ -114,7 +122,10 @@ abstract class ChronoLocalDateTime[D <: ChronoLocalDate]
 
   def isEqual(other: ChronoLocalDateTime[_]): Boolean = {
     this.toLocalTime().toNanoOfDay() == other.toLocalTime().toNanoOfDay() &&
-    this.toLocalDate().toEpochDay() == other.toLocalDate().toEpochDay()
+    this.toLocalDate().asInstanceOf[D].toEpochDay() == other
+      .toLocalDate()
+      .asInstanceOf[D]
+      .toEpochDay()
   }
 
   override def equals(obj: Any): Boolean = {
@@ -144,12 +155,13 @@ object ChronoLocalDateTime {
     new Comparator[ChronoLocalDateTime[_]]() {
       override def compare(datetime1: ChronoLocalDateTime[_],
                            datetime2: ChronoLocalDateTime[_]): Int = {
-        datetime1.toLocalDate.toEpochDay()
-        var cmp = Utils.compareLongs(datetime1.toLocalDate().toEpochDay(),
-                                     datetime2.toLocalDate().toEpochDay());
+        datetime1.toLocalDate().asInstanceOf[ChronoLocalDate].toEpochDay()
+        var cmp = Utils.compareLongs(
+          datetime1.toLocalDate().asInstanceOf[ChronoLocalDate].toEpochDay(),
+          datetime2.toLocalDate().asInstanceOf[ChronoLocalDate].toEpochDay())
         if (cmp == 0) {
           cmp = Utils.compareLongs(datetime1.toLocalTime().toNanoOfDay(),
-                                   datetime2.toLocalTime().toNanoOfDay());
+                                   datetime2.toLocalTime().toNanoOfDay())
         }
         cmp
       }
@@ -157,8 +169,8 @@ object ChronoLocalDateTime {
 
   def from(temporal: TemporalAccessor): ChronoLocalDateTime[_] = {
     Objects.requireNonNull(temporal, "temporal")
-    if (temporal.isInstanceOf[ChronoLocalDateTime]) {
-      return temporal.asInstanceOf[ChronoLocalDateTime[_]]
+    if (temporal.isInstanceOf[ChronoLocalDateTime[_]]) {
+      temporal.asInstanceOf[ChronoLocalDateTime[_]]
     } else {
       val chrono: Chronology = temporal.query(TemporalQueries.chronology())
       if (chrono == null) {

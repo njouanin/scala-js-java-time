@@ -450,15 +450,15 @@ object LocalTime {
     var second: Byte = 0
     var nano: Int = 0
     if (hour < 0) {
-      hour = ~hour
+      hour = (~hour.toInt).toByte
     } else {
       minute = in.readByte()
       if (minute < 0) {
-        minute = ~minute
+        minute = (~minute.toInt).toByte
       } else {
         second = in.readByte()
         if (second < 0) {
-          second = ~second
+          second = (~second.toInt).toByte
         } else {
           nano = in.readInt()
         }

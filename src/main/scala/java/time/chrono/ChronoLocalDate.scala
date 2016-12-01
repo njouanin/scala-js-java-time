@@ -1,10 +1,13 @@
 package java.time.chrono
 
+import java.time.LocalTime
 import java.time.temporal._
-import java.{util => ju}
+import java.{util ⇒ ju}
 
 trait ChronoLocalDate
-    extends Temporal with TemporalAdjuster with Comparable[ChronoLocalDate] {
+    extends Temporal
+    with TemporalAdjuster
+    with Comparable[ChronoLocalDate] {
   import ChronoField._
 
   def getChronology(): Chronology
@@ -19,25 +22,27 @@ trait ChronoLocalDate
 
   def isSupported(field: TemporalField): Boolean = field match {
     case _: ChronoField => field.isDateBased
-    case null           => false
-    case _              => field.isSupportedBy(this)
+    case null => false
+    case _ => field.isSupportedBy(this)
   }
 
   def isSupported(unit: TemporalUnit): Boolean = unit match {
     case _: ChronoUnit => unit.isDateBased
-    case null          => false
-    case _             => unit.isSupportedBy(this)
+    case null => false
+    case _ => unit.isSupportedBy(this)
   }
 
   override def `with`(adjuster: TemporalAdjuster): ChronoLocalDate =
     adjuster.adjustInto(this).asInstanceOf[ChronoLocalDate]
 
-  def `with`(field: TemporalField, value: Long): ChronoLocalDate = field match {
-    case _: ChronoField =>
-      throw new UnsupportedTemporalTypeException(s"Unsupported field: $field")
+  def `with`(field: TemporalField, value: Long): ChronoLocalDate =
+    field match {
+      case _: ChronoField =>
+        throw new UnsupportedTemporalTypeException(
+          s"Unsupported field: $field")
 
-    case _ => field.adjustInto(this, value)
-  }
+      case _ => field.adjustInto(this, value)
+    }
 
   override def plus(amount: TemporalAmount): ChronoLocalDate =
     amount.addTo(this).asInstanceOf[ChronoLocalDate]
@@ -69,8 +74,8 @@ trait ChronoLocalDate
   // Not implemented
   // def format(formatter: java.time.format.DateFormatter): String
 
-  // TODO
-  // def atTime(localTime: LocalTime): ChronoLocalDateTime[_]
+  def atTime(localTime: LocalTime): ChronoLocalDateTime[_] =
+    ChronoLocalDateTimeImpl.of(this, localTime)
 
   def toEpochDay(): Long = getLong(EPOCH_DAY)
 

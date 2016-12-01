@@ -9,7 +9,7 @@
 package java.time.format
 
 import java.time.DateTimeException
-import java.time.temporal.{TemporalAccessor, TemporalQuery}
+import java.time.temporal.{TemporalAccessor, TemporalField, TemporalQuery}
 import java.util.Locale
 
 final class DateTimePrintContext(temporal: TemporalAccessor,
@@ -32,6 +32,8 @@ final class DateTimePrintContext(temporal: TemporalAccessor,
     }
     result
   }
+
+  def getValue(field: TemporalField): Long = temporal.getLong(field)
 
   def getTemporal(): TemporalAccessor = temporal
 
