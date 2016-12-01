@@ -37,4 +37,6 @@ final class DateTimePrintContext(temporal: TemporalAccessor,
 
   def getTemporal(): TemporalAccessor = temporal
 
+  def getSymbols(): DecimalStyle = symbols
+
 }

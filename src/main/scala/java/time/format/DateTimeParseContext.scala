@@ -85,6 +85,8 @@ final class DateTimeParseContext(
 
   def getParsed(field: TemporalField): Long =
     currentParsed().fieldValues.get(field)
+
+  def getSymbols(): DecimalStyle = symbols
 }
 
 object DateTimeParseContext {
