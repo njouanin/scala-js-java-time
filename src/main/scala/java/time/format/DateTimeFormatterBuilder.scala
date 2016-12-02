@@ -8,22 +8,22 @@
  */
 package java.time.format
 
-import java.math.BigInteger
+import java.math.{BigInteger, RoundingMode}
 import java.text.{DateFormat, SimpleDateFormat}
 import java.time.{DateTimeException, LocalDateTime, Utils, ZoneOffset}
 import java.time.chrono.Chronology
 import java.time.format.DateTimeFormatterBuilder._
 import java.time.format.FormatStyle.FormatStyle
-import java.time.temporal.{ChronoField, TemporalField}
+import java.time.temporal.{ChronoField, Temporal, TemporalField}
 import java.util
 import java.util.{Locale, Objects}
 import java.time.temporal.ChronoField._
 
 final class DateTimeFormatterBuilder private (
-    private[this] var parent: Option[DateTimeFormatterBuilder],
-    private[this] var optional: Boolean) {
+    private[format] var parent: DateTimeFormatterBuilder,
+    private[format] var optional: Boolean) {
 
-  private val active: DateTimeFormatterBuilder = this
+  private var active: DateTimeFormatterBuilder = this
   private var padNextWidth: Int = _
   private var padNextChar: Char = _
   private var valueParserIndex: Int = -1
@@ -124,6 +124,15 @@ final class DateTimeFormatterBuilder private (
     this
   }
 
+  def appendFraction(field: TemporalField,
+                     minWidth: Int,
+                     maxWidth: Int,
+                     decimalPoint: Boolean): DateTimeFormatterBuilder = {
+    appendInternal(
+      new FractionPrinterParser(field, minWidth, maxWidth, decimalPoint))
+    this
+  }
+
   private def appendInternal(pp: DateTimePrinterParser): Integer = {
     Objects.requireNonNull(pp, "pp")
     active.printerParsers.add(if (active.padNextWidth > 0) {
@@ -157,6 +166,42 @@ final class DateTimeFormatterBuilder private (
       } else {
         appendInternal(new StringLiteralPrinterParser(literal))
       }
+    }
+    this
+  }
+
+  def toFormatter(): DateTimeFormatter = toFormatter(Locale.getDefault())
+
+  def toFormatter(locale: Locale): DateTimeFormatter = {
+    Objects.requireNonNull(locale, "locale")
+    while (active.parent != null) {
+      optionalEnd()
+    }
+    val pp = new CompositePrinterParser(printerParsers, false)
+    new DateTimeFormatter(pp,
+                          locale,
+                          DecimalStyle.STANDARD,
+                          ResolverStyle.SMART,
+                          null,
+                          null,
+                          null)
+  }
+
+  def toFormatter(style: ResolverStyle): DateTimeFormatter =
+    toFormatter().withResolverStyle(style)
+
+  def optionalEnd(): DateTimeFormatterBuilder = {
+    if (active.parent == null) {
+      throw new IllegalStateException(
+        "Cannot call optionalEnd() as there was no previous call to optionalStart()")
+    }
+    if (active.printerParsers.size() > 0) {
+      val cpp =
+        new CompositePrinterParser(active.printerParsers, active.optional)
+      active = active.parent
+      appendInternal(cpp)
+    } else {
+      active = active.parent
     }
     this
   }
@@ -514,6 +559,197 @@ object DateTimeFormatterBuilder {
     }
 
     override def toString(): String = "Instant()"
+  }
+
+  class CharLiteralPrinterParser(private[format] val literal: Char)
+      extends DateTimePrinterParser {
+    override def print(context: DateTimePrintContext,
+                       buf: StringBuilder): Boolean = {
+      buf.append(literal)
+      return true
+    }
+
+    override def parse(context: DateTimeParseContext,
+                       text: CharSequence,
+                       position: Int): Int = {
+      val length = text.length()
+      if (position == length) {
+        ~position
+      } else {
+        val ch = text.charAt(position)
+        if (!context.charEquals(literal, ch))
+          ~position
+        else
+          position + 1
+      }
+    }
+
+    override def toString(): String =
+      if (literal == '\'') "''" else s"'$literal'"
+  }
+
+  class StringLiteralPrinterParser(private[format] val literal: String)
+      extends DateTimePrinterParser {
+    override def print(context: DateTimePrintContext,
+                       buf: StringBuilder): Boolean = {
+      buf.append(literal)
+      true
+    }
+
+    override def parse(context: DateTimeParseContext,
+                       text: CharSequence,
+                       position: Int): Int = {
+      val length = text.length()
+      if (position > length || position < 0) {
+        throw new IndexOutOfBoundsException()
+      }
+      if (!context.subSequenceEquals(text,
+                                     position,
+                                     literal,
+                                     0,
+                                     literal.length())) {
+        ~position
+      } else
+        position + literal.length()
+    }
+
+    override def toString(): String = {
+      val converted = literal.replace("'", "''")
+      "'" + converted + "'"
+    }
+  }
+
+  class FractionPrinterParser(private[format] val field: TemporalField,
+                              private[format] val minWidth: Int,
+                              private[format] val maxWidth: Int,
+                              private[format] val decimalPoint: Boolean)
+      extends DateTimePrinterParser {
+    Objects.requireNonNull(field, "field")
+    if (!field.range().isFixed()) {
+      throw new IllegalArgumentException(
+        "Field must have a fixed set of values: " + field)
+    }
+    if (minWidth < 0 || minWidth > 9) {
+      throw new IllegalArgumentException(
+        s"Minimum width must be from 0 to 9 inclusive but was $minWidth")
+    }
+    if (maxWidth < 1 || maxWidth > 9) {
+      throw new IllegalArgumentException(
+        s"Maximum width must be from 1 to 9 inclusive but was $maxWidth")
+    }
+    if (maxWidth < minWidth) {
+      throw new IllegalArgumentException(
+        s"Maximum width must exceed or equal the minimum width but $maxWidth  < $minWidth")
+    }
+
+    override def print(context: DateTimePrintContext,
+                       buf: StringBuilder): Boolean = {
+      val value = context.getValue(field)
+      if (value == null) {
+        false
+      } else {
+        val symbols = context.getSymbols()
+        var fraction = convertToFraction(value)
+        if (fraction.scale == 0) { // scale is zero if value is zero
+          if (minWidth > 0) {
+            if (decimalPoint) {
+              buf.append(symbols.getDecimalSeparator())
+            }
+            for (i <- 0 to minWidth) {
+              buf.append(symbols.getZeroDigit())
+            }
+          }
+        } else {
+          val outputScale =
+            Math.min(Math.max(fraction.scale, minWidth), maxWidth)
+          fraction =
+            fraction.setScale(outputScale, BigDecimal.RoundingMode.FLOOR);
+          var str = fraction.underlying().toPlainString().substring(2)
+          str = symbols.convertNumberToI18N(str)
+          if (decimalPoint) {
+            buf.append(symbols.getDecimalSeparator())
+          }
+          buf.append(str);
+        }
+        true
+      }
+    }
+
+    override def parse(context: DateTimeParseContext,
+                       text: CharSequence,
+                       pos: Int): Int = {
+      var position = pos
+      val effectiveMin = if (context.isStrict()) minWidth else 0
+      val effectiveMax = if (context.isStrict()) maxWidth else 9
+      val length = text.length()
+      if (position == length) {
+        if (effectiveMin > 0) ~position else position
+      } else {
+        if (decimalPoint) {
+          if (text.charAt(position) != context
+                .getSymbols()
+                .getDecimalSeparator()) {
+            return if (effectiveMin > 0) ~position else position
+          }
+          position += 1
+        }
+        val minEndPos = position + effectiveMin
+        if (minEndPos > length) {
+          return ~position
+        }
+        val maxEndPos = Math.min(position + effectiveMax, length)
+        var total: Int = 0; // can use int because we are only parsing up to 9 digits
+        var pos = position
+        var stop = false
+        while (pos < maxEndPos && !stop) {
+          pos += 1
+          val ch = text.charAt(pos)
+          val digit = context.getSymbols().convertToDigit(ch)
+          if (digit < 0) {
+            if (pos < minEndPos) {
+              return ~position
+            }
+            pos -= 1
+            stop = true
+          }
+          total = total * 10 + digit
+        }
+        val fraction =
+          BigDecimal(total).underlying().movePointLeft(pos - position)
+        val value = convertFromFraction(fraction)
+        context.setParsedField(field, value, position, pos)
+      }
+    }
+
+    private def convertToFraction(value: Long): BigDecimal = {
+      val range = field.range()
+      range.checkValidValue(value, field)
+      val minBD = BigDecimal.valueOf(range.getMinimum())
+      val rangeBD = BigDecimal.valueOf(range.getMaximum()) - minBD + BigDecimal(
+          1)
+      val valueBD = BigDecimal.valueOf(value) - minBD
+      val fraction =
+        (valueBD / rangeBD).setScale(9, BigDecimal.RoundingMode.FLOOR)
+      if (fraction == BigDecimal(0))
+        BigDecimal(0)
+      else
+        fraction.underlying().stripTrailingZeros()
+    }
+
+    private def convertFromFraction(fraction: BigDecimal): Long = {
+      val range = field.range()
+      val minBD = BigDecimal.valueOf(range.getMinimum())
+      val rangeBD = BigDecimal.valueOf(range.getMaximum()) - minBD + BigDecimal(
+          1)
+      val valueBD =
+        (fraction * rangeBD).setScale(0, BigDecimal.RoundingMode.FLOOR) + minBD
+      valueBD.toLongExact
+    }
+
+    override def toString(): String = {
+      val decimal = if (decimalPoint) ",DecimalPoint" else ""
+      "Fraction(" + field + "," + minWidth + "," + maxWidth + decimal + ")"
+    }
   }
 
   class NumberPrinterParser(protected[format] val field: TemporalField,

@@ -40,6 +40,36 @@ final class DateTimeParseContext(
     strict = other.strict
   }
 
+  def subSequenceEquals(cs1: CharSequence,
+                        offset1: Int,
+                        cs2: CharSequence,
+                        offset2: Int,
+                        length: Int): Boolean = {
+    if (offset1 + length > cs1.length() || offset2 + length > cs2.length()) {
+      return false
+    }
+    if (isCaseSensitive()) {
+      for (i <- 0 to length) {
+        val ch1 = cs1.charAt(offset1 + i)
+        val ch2 = cs2.charAt(offset2 + i)
+        if (ch1 != ch2) {
+          return false
+        }
+      }
+    } else {
+      for (i ← 0 to length) {
+        val ch1 = cs1.charAt(offset1 + i)
+        val ch2 = cs2.charAt(offset2 + i)
+        if (ch1 != ch2 && Character.toUpperCase(ch1) != Character.toUpperCase(
+              ch2) &&
+            Character.toLowerCase(ch1) != Character.toLowerCase(ch2)) {
+          return false
+        }
+      }
+    }
+    return true
+  }
+
   def copy(): DateTimeParseContext = new DateTimeParseContext(this)
 
   def setStrict(strict: Boolean): Unit = this.strict = strict
@@ -85,6 +115,8 @@ final class DateTimeParseContext(
 
   def getParsed(field: TemporalField): Long =
     currentParsed().fieldValues.get(field)
+
+  def toParsed(): Parsed = currentParsed()
 
   def getSymbols(): DecimalStyle = symbols
 }
